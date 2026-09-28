@@ -1,0 +1,40 @@
+name: twheat
+on:
+  schedule:
+    - cron: "0 14 * * 1-5"      # UTC 14:00 = 加州 7:00 (PDT) / 台灣 22:00
+  workflow_dispatch:            # 手機上 Actions → Run workflow 可手動觸發
+    inputs:
+      cmd:
+        description: "check / daily / backfill / backtest / demo"
+        default: "daily"
+      days:
+        description: "backfill 天數"
+        default: "21"
+permissions:
+  contents: write
+concurrency: twheat
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: run
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PAGES_URL: ${{ vars.PAGES_URL }}
+          TZ: Asia/Taipei
+        run: python run.py ${{ github.event.inputs.cmd || 'daily' }} --days ${{ github.event.inputs.days || '21' }}
+      - name: save data
+        if: always()
+        run: |
+          git config user.name "twheat-bot"
+          git config user.email "twheat-bot@users.noreply.github.com"
+          git add -f data/forum.db docs 2>/dev/null || true
+          git commit -m "data $(date -u +%F) [skip ci]" || echo "no changes"
+          git push
